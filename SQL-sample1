@@ -1,0 +1,36 @@
+-- Last Updated : 2021-03-08
+-- Author       : Mohsen Mohammadi
+-- Description  : The query collects the IPs linked to the notices sent out by FMTS for the past week. Then, the results are compared against similar incidents in the past year. If same IPs are found linked to the                        same hosting provider, that ASN is marked ‘as failed to comply for removing that IP. Only ISP Notices are considered. 
+
+#standardSQL
+DECLARE doi DATE DEFAULT "2021-02-17";
+WITH
+
+  woi_incidents AS(
+    SELECT DISTINCT
+      DATE(unnested_states_notices_date_inserted) AS utc_date
+      ,unnested_states_notices_recipients AS recipient
+      ,custom_states_notices_content_ip AS ip
+      ,source_name
+    FROM   fmts.unnested_all_incidents
+    WHERE  DATE(unnested_states_notices_date_inserted) BETWEEN doi-6 AND doi
+      and unnested_states_notices_recipients IN ('abuse@ovh.net')
+      and unnested_states_notices_type = 'ISP Notice' 
+      and client_id != 97 
+      AND  custom_states_notices_content_ip IS NOT NULL)
+ 
+ 
+
+
+SELECT DISTINCT 
+chunks_ip_v4,
+IFNULL(unnested_spider_meta_service_name, NET.REG_DOMAIN(reporting_media_url)) AS IPTV
+
+FROM woi_incidents
+    LEFT JOIN `stone-flux-161611.fmts.unnested_all_ms`
+    ON woi_incidents.ip = chunks_ip_v4
+    WHERE DATE(date_seen) BETWEEN doi-6 AND doi
+
+
+
+
