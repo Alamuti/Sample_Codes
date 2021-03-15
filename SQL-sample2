@@ -1,0 +1,137 @@
+-- Last Updated : 2020-12-17
+-- Author       : Mohsen Mohammadi
+-- Play with FMTS and DNS data to produce results.
+
+#standardSQL
+-- declare 2 timestamps of interest
+DECLARE start TIMESTAMP DEFAULT TIMESTAMP(CONCAT(DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY), " 00:00:00"), "Europe/London");
+DECLARE finish TIMESTAMP DEFAULT TIMESTAMP(CONCAT(DATE_SUB(CURRENT_DATE(), INTERVAL 1 DAY), " 23:59:59"), "Europe/London");
+WITH
+-- get top 10 ip-tv services from FMTS data
+    top10_iptv_services AS(
+        SELECT
+            unnest_spider_meta_service_name
+            ,COUNT(unnest_spider_meta_service_name) AS count_iptv_services
+        FROM
+            fmts.stsql_overall
+        WHERE
+            (date_inserted >= start AND date_inserted <= finish)
+        AND
+            unnest_spider_meta_service_name IS NOT NULL
+        GROUP BY
+            unnest_spider_meta_service_name
+        ORDER BY
+            count_iptv_services DESC
+        LIMIT 10)
+
+-- get all IPs that are associated with the top 10 ip-tv services from FMTS data
+    ,top10_fmts_info AS(
+        SELECT DISTINCT
+            NET.HOST(reporting_media_url) AS host
+            ,chunks_ip_v4 AS ip
+            ,"FMTS" AS origin
+        FROM
+            fmts.stsql_overall
+        WHERE
+            (date_inserted >= start AND date_inserted <= finish)
+        AND
+            unnest_spider_meta_service_name IN (
+                SELECT 
+                    unnest_spider_meta_service_name 
+                FROM
+                    top10_iptv_services))
+
+-- get all IPs that are associated with the top 10 ip-tv services and any extras that can be found in the DNS data
+    ,dns_info AS(
+        SELECT DISTINCT
+            NET.HOST(QUERY_REQUEST) AS host
+            ,unnest_dnsrecords.ANSWER_VALUE AS ip
+            ,"DNS" AS origin            
+        FROM
+            dnssampler.prod_samples
+        LEFT JOIN
+            UNNEST(DNSRECORDS) AS unnest_dnsrecords
+        WHERE
+            unnest_dnsrecords.ANSWER_TYPE = "A"
+        AND
+            NET.HOST(QUERY_REQUEST) IN (
+                SELECT DISTINCT
+                    host
+                FROM
+                    top10_fmts_info)
+        AND
+            (TS >= start AND TS <= finish))
+
+-- get the count for the dns servers
+    ,dns_counters AS(
+        SELECT
+            NET.HOST(QUERY_REQUEST) AS host
+            ,COUNT(NET.HOST(QUERY_REQUEST)) AS host_count
+        FROM
+            dnssampler.prod_samples
+            ,UNNEST(DNSRECORDS)
+        WHERE
+            prod_samples.TS >= start 
+        AND 
+            prod_samples.TS <= finish
+        GROUP BY
+            host)
+
+-- combine both data to get a host and all ips associated with it with their origin
+    ,combined_ips AS(
+        SELECT
+            un_table.host
+            ,host_count
+            ,ip
+            ,STRING_AGG(DISTINCT origin, " + ") AS origin
+        FROM
+            (SELECT
+                *
+            FROM
+                top10_fmts_info
+            UNION ALL
+            SELECT
+                *
+            FROM
+                dns_info) AS un_table
+        LEFT JOIN
+            dns_counters
+        ON
+            un_table.host = dns_counters.host 
+        GROUP BY
+            host
+            ,host_count
+            ,ip)
+
+            
+SELECT
+    FORMAT_TIMESTAMP("%d/%m/%Y %H:%M",TIMESTAMP_SECONDS(DIV(UNIX_SECONDS(first_switched), 300) * 300), 'Europe/London') AS time
+    ,nf.sky_src_asn as asn
+    ,host
+    ,host_count
+    ,nf.ipv4_src_addr  as ip
+    ,origin
+    ,IF ((is_pl2019 = false) AND (sa.Analyse = 1), 2, sa.Analyse) AS analyse
+    ,SUM(in_bytes*sc.scale) *8*10000 / 300 / 1000000000 AS gbps   
+FROM 
+    netflow.bigflow AS nf
+JOIN 
+    combined_ips AS interest
+  ON 
+    interest.ip=nf.ipv4_src_addr
+JOIN 
+    netflow2.bigflow_scale AS sc
+ON 
+    sc.time = TIMESTAMP_SECONDS(DIV(UNIX_SECONDS(first_switched), 300) * 300)
+LEFT JOIN 
+    refdata.suspect_asn AS sa
+ON 
+    nf.sky_src_asn=sa.asn   
+WHERE 
+    nf._partitiontime=start
+AND 
+    exporter_ipv4_address IN ('89.200.128.77', '84.38.34.45', '84.38.34.56', '84.38.34.55', '89.200.128.78', '89.200.128.36', '89.200.128.108')
+GROUP BY 
+    asn, host, host_count, ip, origin, analyse, time
+ORDER BY 
+    time
