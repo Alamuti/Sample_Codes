@@ -1,19 +1,13 @@
 # Sample_Codes
-This repository provides a sample of my recent codes I have developed. In my recent prject, I have developed a classification algorithms which identifies the illegal IP addresses using
-their traffic pattern during the day. The traffic data for all IP address for the past couple of years is been stored in Google Bigquery comping up to 300TB. Each IP has also many other 
-attributes which can help identifuying its class. on The first step, SQL used to for intitial data processing, next Python is used for creating and analysing the data set and finally 
-data is trained using various algorithms such as convlutional neural network or tree based xgboost.
+This repository provides a sample of my recent codes as requested. In one of the recent projects, I have developed a ML classification algorithm which identifies the illegal streaming IP addresses using their traffic pattern during a day. The traffic data is stored in Google Bigquery totalling up to a 300TB. 
+On top of the traffic pattern, illegal IPs can also be identified by other attributes where SQL skills will be handy to search for and narrow down such traffic. Initially, SQL queries are used to for data processing and identifying the possible attributes of illegal streamers. As next steps Python is used for further data processing and creating test and train datasets. Finally, the ML models are trained using various Tensorflow algorithms such as convolutional neural network or tree-based methods xgboost. The provided sample codes contain the following:
 
-It containes the following:
+1.	You can find two Standard SQL for initial data assessments from relatively complex JSON tables stored in Bigquery.
+	
+2.	A sample Jupyter notebook (written in Python) that provides some helper functions for data-pre-processing.
+	
+3.	XGBoost algorithm for training and testing the ip-classification model (including the hp-tuning).
+	
+4.	Due to the large size of the models and the training data, local processors are not able to complete the training in reasonable time. Since a code was developed to train the above dataset on gpu enabled google cloud within the ai-platform on GCP. The tf-keras folder provides this package.
 
-1) You can find two Standard SQL for building a dataset from a relatively complex JSON data sources stored in Bigquery.
-
-2) A sample jupyter notebook (written in Phython) that provides some helper functions for data-preprecessing.
-
-3) XGBoost algorithm for training the ip-classification dataset (including the hp-tuning) 
-
-4) Due to the large size of the models and the traning data, local processors are not able to compleete the traning in reasonable time. Since a code was developed to 
-to train the above dataset on gpu enabled google cloud through the ai-platform. The tf-keras folder provides this package. 
-
-
-5) The last example provide a LSTM deep learning time series prediction example which I have developed.
+5.	The last example provides a LSTM deep learning time series prediction example which I have developed (open it with a chrome or Microsoft browser).
